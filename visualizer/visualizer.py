@@ -4,7 +4,7 @@ import csv
 from itertools import islice
 
 # Open the CSV file and create a CSV reader object
-csvfile = open('D:/VSCode projects/NBodyProblem/visualizer/body_positions.csv', 'r')
+csvfile = open('visualizer/body_positions.csv', 'r')
 csvreader = csv.reader(csvfile)
 
 # Function to update the data for animation
@@ -18,7 +18,7 @@ def update(num, scatter):
         x = coords[::3]
         y = coords[1::3]
         z = coords[2::3]
-        print(x)
+        # print(x)
         scatter._offsets3d = (x, y, z)
     except StopIteration:
         print("Reached end of CSV.")
