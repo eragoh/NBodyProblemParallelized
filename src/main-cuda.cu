@@ -5,7 +5,7 @@
 #include <random>
 #include <fstream>
 
-#define STEPS 10000000
+#define STEPS 1000
 #define TIME_STEP 1 // Time step in seconds
 #define GRAVITATIONAL_CONSTANT 6.67430e-11 // Time step in seconds
 #define STEPS_BETWEEN_WRITING 20
@@ -50,10 +50,21 @@ void errorexit(const char *s) {
     exit(EXIT_FAILURE);	 	
 }
 
+__host__
+void write_bodies_to_csv(std::vector<Body> &bodies, std::ofstream &csvfile) {
+    for (const auto& body : bodies) {
+        csvfile << body.x << "," << body.y << "," << body.z;
+        if (&body != &bodies.back()) {
+            csvfile << ",";
+        }
+    }
+    csvfile << "\n";
+}
+
 __global__
 void update_forces_and_positions(Body *bodies, int n) {
+    int my_index=blockIdx.x*blockDim.x+threadIdx.x;
     for (int j = 0; j < STEPS_BETWEEN_WRITING; ++j) {
-        int my_index=blockIdx.x*blockDim.x+threadIdx.x;
         double fx = 0.0, fy = 0.0, fz = 0.0;
         for (int i = 0; i < n; ++i) {
             if (my_index == i) continue;
@@ -77,22 +88,23 @@ void update_forces_and_positions(Body *bodies, int n) {
         bodies[my_index].x += bodies[my_index].vx * TIME_STEP;
         bodies[my_index].y += bodies[my_index].vy * TIME_STEP;
         bodies[my_index].z += bodies[my_index].vz * TIME_STEP;
+        __syncthreads();
     }
 }
 
 int main() {
-    printf("MAIN\n");
+    printf("CUDA\n");
 
     int threadsinblock = 1024;
     int blocksingrid = 1;
 
-    // cudaStream_t stream, stream2;
-    // cudaStreamCreate(&stream1);
-    // cudaStreamCreate(&stream2);
+    cudaStream_t calc_stream, copy_stream;
+    cudaStreamCreate(&calc_stream);
+    cudaStreamCreate(&copy_stream);
 
     std::vector<Body> h_bodies;
-    Body* d_bodies;
- 
+    Body *d_bodies, *d_bodies2;
+
     h_bodies.push_back({0, 0, 0, 1.989e30, 0, 0, 0}); // Sun
     h_bodies.push_back({57.9e9, 0, 0, 3.3011e23, 0, 47.87e3, 0}); // Mercury
     h_bodies.push_back({108.2e9, 0, 0, 4.8675e24, 0, 35.02e3, 0}); // Venus
@@ -105,8 +117,11 @@ int main() {
 
     add_randomized_bodies(h_bodies, 1015);
     
-    //devie memory allocation (GPU)
+    //device memory allocation (GPU)
     if (cudaSuccess!=cudaMalloc(&d_bodies, h_bodies.size() * sizeof(Body)))
+      errorexit("Error allocating memory on the GPU");
+    
+    if (cudaSuccess!=cudaMalloc(&d_bodies2, h_bodies.size() * sizeof(Body)))
       errorexit("Error allocating memory on the GPU");
 
     cudaMemcpy(d_bodies, h_bodies.data(), h_bodies.size() * sizeof(Body), cudaMemcpyHostToDevice);
@@ -114,23 +129,39 @@ int main() {
     // Create and open a new CSV file
     std::ofstream csvfile("../../visualizer/body_positions.csv");
 
+    // First Writing and Calculations
+    update_forces_and_positions<<<blocksingrid,threadsinblock, 0, calc_stream>>>(d_bodies, h_bodies.size());
+    write_bodies_to_csv(h_bodies, csvfile);
+
     // Main simulation loop
-    for (int step = 0; step < STEPS; step+=STEPS_BETWEEN_WRITING) {
-        // Write positions to CSV file
-        for (const auto& body : h_bodies) {
-            csvfile << body.x << "," << body.y << "," << body.z;
-            if (&body != &h_bodies.back()) {
-                csvfile << ",";
-            }
-        }
-        csvfile << "\n";
-        printf("%f\n", step*100.0/STEPS);
-        update_forces_and_positions<<<blocksingrid,threadsinblock,threadsinblock>>>(d_bodies, h_bodies.size());
-        cudaDeviceSynchronize();
-        cudaMemcpy(h_bodies.data(), d_bodies, h_bodies.size() * sizeof(Body), cudaMemcpyDeviceToHost);
+    for (int step = 1; step < STEPS; step+=STEPS_BETWEEN_WRITING) {
+        std::swap(d_bodies, d_bodies2);
+        printf("%f%\n", step*100.0/STEPS);
+        cudaStreamSynchronize(calc_stream);
+        update_forces_and_positions<<<blocksingrid,threadsinblock, 0, calc_stream>>>(d_bodies, h_bodies.size());
+        cudaMemcpyAsync(h_bodies.data(), d_bodies2, h_bodies.size() * sizeof(Body), cudaMemcpyDeviceToHost, copy_stream);
+        cudaStreamSynchronize(copy_stream);
+        write_bodies_to_csv(h_bodies, csvfile);
     }
 
     cudaFree(d_bodies);
+    cudaFree(d_bodies2);
     csvfile.close();  // Close the CSV file
     return 0;
 }
+
+
+// użyć pamięci shared
+// 2 streamy
+// dynamic paralellism można spróbować żeby bardziej GPU użyć // ewentualnie więcej bloków ogarnąć
+// vector3 zamiast double x,y,z może coś dać
+
+// czasy:
+// x przed pętlą w samym kernelu (wykonywałem wcześniej 20 razy kernel, a teraz jest pętla w kernelu na 20 iteracji)
+// x jeden strumień
+// 12:52 dwa strumienie, nałożenie obliczeń i memcpyAsync (trzeba wyczaić co trwa krócej, bo może copy czeka np. 3 krotność swojego czasu działania na calc'a -- można
+//                                                     by to pewnie poprawić poprzez zwiększenie liczby strumieni copy lub zmniejszyć STEPS_BETWEEN_WRITING czy coś)
+
+
+
+// wygląda na to że memcpyAsync nie zabiera właściwie wcale czasu, a na calc_stream zawsze czekam w synchronizacji ...
