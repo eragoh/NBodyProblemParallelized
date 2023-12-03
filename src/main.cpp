@@ -5,7 +5,7 @@
 #include <random>
 #include <fstream>
 
-#define STEPS 10000000
+#define STEPS 100000000
 
 struct Body {
     double x, y, z;
