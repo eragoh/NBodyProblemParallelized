@@ -5,7 +5,7 @@
 #include <random>
 #include <fstream>
 
-#define STEPS 100000000
+#define STEPS 1000000
 
 struct Body {
     double x, y, z;
@@ -58,6 +58,7 @@ void update_forces_and_positions(std::vector<Body>& bodies, double dt) {
             fy += force * dy;
             fz += force * dz;
         }
+
         bodies[i].vx += fx / bodies[i].mass;
         bodies[i].vy += fy / bodies[i].mass;
         bodies[i].vz += fz / bodies[i].mass;
@@ -71,6 +72,7 @@ void update_forces_and_positions(std::vector<Body>& bodies, double dt) {
 int main() {
     printf("MAIN\n");
     std::vector<Body> bodies;
+
     bodies.push_back({0, 0, 0, 1.989e30, 0, 0, 0}); // Sun
     bodies.push_back({57.9e9, 0, 0, 3.3011e23, 0, 47.87e3, 0}); // Mercury
     bodies.push_back({108.2e9, 0, 0, 4.8675e24, 0, 35.02e3, 0}); // Venus
@@ -79,8 +81,9 @@ int main() {
     bodies.push_back({778.6e9, 0, 0, 1.898e27, 0, 13.07e3, 0}); // Jupiter
     bodies.push_back({1.433e12, 0, 0, 5.683e26, 0, 9.69e3, 0}); // Saturn
     bodies.push_back({2.872e12, 0, 0, 8.681e25, 0, 6.81e3, 0}); // Uranus
-    bodies.push_back({4.495e12, 0, 0, 1.024e26, 0, 5.43e3, 0}); // Neptune
-    
+    // bodies.push_back({4.495e12, 0, 0, 1.024e26, 0, 5.43e3, 0}); // Neptune
+    add_randomized_bodies(bodies, 1016);
+
     const double dt = 1;  // Time step in seconds
     
     // Create and open a new CSV file
@@ -89,15 +92,15 @@ int main() {
     // Main simulation loop
     for (int step = 0; step < STEPS; ++step) {
         // Write positions to CSV file
-        if (step % 20 == 0) {
+        if (step % 20000 == 0) {
             for (const auto& body : bodies) {
                 csvfile << body.x << "," << body.y << "," << body.z;
                 if (&body != &bodies.back()) {
                     csvfile << ",";
                 }
             }
-        csvfile << "\n";
-        printf("%f\n", step*100.0/STEPS);
+            csvfile << "\n";
+            printf("%.2f%\n", step*100.0/STEPS);
         }
         update_forces_and_positions(bodies, dt);
     }
