@@ -5,7 +5,11 @@
 #include <random>
 #include <fstream>
 
-#define STEPS 1000000
+#define BODIES 512
+#define STEPS 100000
+#define TIME_STEP 1 // Time step in seconds
+#define GRAVITATIONAL_CONSTANT 6.67430e-11 // Time step in seconds
+#define STEPS_BETWEEN_WRITING 20000
 
 struct Body {
     double x, y, z;
@@ -40,8 +44,7 @@ void add_randomized_bodies(std::vector<Body> &bodies, int N) {
     }
 }
 
-void update_forces_and_positions(std::vector<Body>& bodies, double dt) {
-    const double G = 6.67430e-11;
+void update_forces_and_positions(std::vector<Body>& bodies) {
     for (int i = 0; i < bodies.size(); ++i) {
         double fx = 0.0, fy = 0.0, fz = 0.0;
         for (int j = 0; j < bodies.size(); ++j) {
@@ -52,7 +55,7 @@ void update_forces_and_positions(std::vector<Body>& bodies, double dt) {
             double dz = bodies[j].z - bodies[i].z;
             
             double dist = std::sqrt(dx * dx + dy * dy + dz * dz);
-            double force = G * bodies[i].mass * bodies[j].mass / (dist * dist * dist);
+            double force = GRAVITATIONAL_CONSTANT * bodies[i].mass * bodies[j].mass / (dist * dist * dist);
             
             fx += force * dx;
             fy += force * dy;
@@ -63,9 +66,9 @@ void update_forces_and_positions(std::vector<Body>& bodies, double dt) {
         bodies[i].vy += fy / bodies[i].mass;
         bodies[i].vz += fz / bodies[i].mass;
 
-        bodies[i].x += bodies[i].vx * dt;
-        bodies[i].y += bodies[i].vy * dt;
-        bodies[i].z += bodies[i].vz * dt;
+        bodies[i].x += bodies[i].vx * TIME_STEP;
+        bodies[i].y += bodies[i].vy * TIME_STEP;
+        bodies[i].z += bodies[i].vz * TIME_STEP;
     }
 }
 
@@ -82,9 +85,7 @@ int main() {
     bodies.push_back({1.433e12, 0, 0, 5.683e26, 0, 9.69e3, 0}); // Saturn
     bodies.push_back({2.872e12, 0, 0, 8.681e25, 0, 6.81e3, 0}); // Uranus
     // bodies.push_back({4.495e12, 0, 0, 1.024e26, 0, 5.43e3, 0}); // Neptune
-    add_randomized_bodies(bodies, 1016);
-
-    const double dt = 1;  // Time step in seconds
+    add_randomized_bodies(bodies, BODIES-8);
     
     // Create and open a new CSV file
     std::ofstream csvfile("../../visualizer/body_positions.csv");
@@ -92,7 +93,7 @@ int main() {
     // Main simulation loop
     for (int step = 0; step < STEPS; ++step) {
         // Write positions to CSV file
-        if (step % 20000 == 0) {
+        if (step % STEPS_BETWEEN_WRITING == 0) {
             for (const auto& body : bodies) {
                 csvfile << body.x << "," << body.y << "," << body.z;
                 if (&body != &bodies.back()) {
@@ -102,7 +103,7 @@ int main() {
             csvfile << "\n";
             printf("%.2f%\n", step*100.0/STEPS);
         }
-        update_forces_and_positions(bodies, dt);
+        update_forces_and_positions(bodies);
     }
 
     csvfile.close();  // Close the CSV file

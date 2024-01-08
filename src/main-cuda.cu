@@ -1,12 +1,11 @@
 #include <iostream>
 #include <vector>
 #include <cmath>
-#include <omp.h>
 #include <random>
 #include <fstream>
 
-#define BODIES 1024
-#define STEPS 1000000
+#define BODIES 512
+#define STEPS 100000
 #define TIME_STEP 1 // Time step in seconds
 #define GRAVITATIONAL_CONSTANT 6.67430e-11 // Time step in seconds
 #define STEPS_BETWEEN_WRITING 20000
@@ -172,4 +171,3 @@ int main() {
     csvfile.close();  // Close the CSV file
     return 0;
 }
-
